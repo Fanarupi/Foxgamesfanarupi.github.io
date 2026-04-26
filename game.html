@@ -193,6 +193,130 @@ canvas{display:block;border-radius:8px;
 @media(max-width:700px){
   .char-panel,.right-panel{display:none;}
 }
+
+/* ═══════════════════════════════════════
+   MOBILE ADAPTATIONS
+═══════════════════════════════════════ */
+
+/* Detect touch: hide ctrl-hint on mobile */
+.is-mobile .ctrl-hint { display: none !important; }
+.is-mobile canvas { cursor: default; border-radius: 0; border: none; }
+
+/* Mobile nav: compact */
+.is-mobile nav { padding: 6px 10px; }
+.is-mobile .nav-logo { font-size: 1.1rem; }
+.is-mobile .nav-links a { font-size: 0.65rem; padding: 4px 8px; }
+
+/* Mobile: char panel becomes a horizontal strip at top */
+.is-mobile .game-layout { flex-direction: column; }
+.is-mobile .char-panel {
+  width: 100%; height: auto; flex-direction: row;
+  overflow-x: auto; overflow-y: hidden;
+  border-right: none; border-bottom: 1px solid var(--bk);
+  padding: 6px; gap: 6px; flex-shrink: 0;
+  scrollbar-width: none;
+}
+.is-mobile .char-panel::-webkit-scrollbar { display: none; }
+.is-mobile .char-panel h3 { display: none; }
+.is-mobile .char-btn {
+  flex-shrink: 0; width: 80px; padding: 6px;
+  display: flex; flex-direction: column; align-items: center;
+}
+.is-mobile .char-btn .cb-icon { font-size: 1.4rem; }
+.is-mobile .char-btn > div:last-child { display: none; }
+
+.is-mobile .right-panel { display: none !important; }
+
+/* Mobile canvas: fill remaining space */
+.is-mobile .canvas-wrap { flex: 1; min-height: 0; }
+.is-mobile canvas { border-radius: 0; }
+
+/* Mobile HUD: smaller */
+.is-mobile .hp-bar-wrap { min-width: 130px; padding: 3px 6px; }
+.is-mobile .hp-name { font-size: 0.75rem; }
+.is-mobile .hp-bar { height: 8px; }
+.is-mobile .super-bar-wrap { min-width: 120px; padding: 3px 6px; }
+.is-mobile .gems-val { font-size: 1.2rem; }
+.is-mobile .mode-val { font-size: 1rem; }
+.is-mobile #killfeed { right: 6px; top: 6px; max-width: 130px; }
+.is-mobile .kf-entry { font-size: 0.58rem; padding: 2px 5px; }
+
+/* ── VIRTUAL JOYSTICK ── */
+#vjoy-zone {
+  position: absolute; left: 0; bottom: 0;
+  width: 50%; height: 45%;
+  display: none; touch-action: none; z-index: 20;
+}
+.is-mobile #vjoy-zone { display: block; }
+
+#vjoy-base {
+  position: absolute;
+  width: 110px; height: 110px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,107,26,0.35);
+  background: rgba(255,107,26,0.08);
+  display: none; pointer-events: none;
+}
+#vjoy-stick {
+  position: absolute;
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,179,71,0.7), rgba(255,107,26,0.4));
+  border: 2px solid rgba(255,179,71,0.6);
+  box-shadow: 0 0 12px rgba(255,107,26,0.4);
+  display: none; pointer-events: none;
+}
+
+/* ── MOBILE ACTION BUTTONS ── */
+#mobile-btns {
+  position: absolute; right: 0; bottom: 0;
+  width: 50%; height: 45%;
+  display: none; touch-action: none; z-index: 20;
+  align-items: flex-end; justify-content: flex-end;
+  padding: 14px;
+}
+.is-mobile #mobile-btns { display: flex; }
+
+.mob-btn {
+  border-radius: 50%; border: 2px solid;
+  font-size: 1.5rem; font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; user-select: none; -webkit-user-select: none;
+  transition: transform 0.08s, box-shadow 0.08s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.mob-btn:active, .mob-btn.pressed {
+  transform: scale(0.88);
+}
+
+#mob-fire {
+  width: 72px; height: 72px;
+  background: radial-gradient(circle, rgba(255,107,26,0.6), rgba(170,51,0,0.4));
+  border-color: rgba(255,179,71,0.7);
+  box-shadow: 0 0 18px rgba(255,107,26,0.4);
+  margin-right: 12px; align-self: flex-end;
+}
+#mob-super {
+  width: 58px; height: 58px;
+  background: radial-gradient(circle, rgba(170,0,255,0.5), rgba(100,0,200,0.3));
+  border-color: rgba(200,100,255,0.6);
+  box-shadow: 0 0 14px rgba(170,0,255,0.3);
+  align-self: flex-start;
+  position: absolute; right: 14px; bottom: 90px;
+}
+#mob-super.disabled { opacity: 0.35; }
+
+/* Mobile overlay: bigger buttons */
+.is-mobile .big-btn { font-size: 1rem; padding: 11px 30px; }
+.is-mobile .mode-grid { grid-template-columns: 1fr; max-width: 260px; }
+.is-mobile .mode-card { padding: 10px; }
+.is-mobile .mode-icon { font-size: 1.5rem; }
+.is-mobile .hint-txt { display: none; }
+.is-mobile .ov-title { font-size: clamp(1.8rem,8vw,2.8rem); }
+
+/* Mobile: hide super-name text in HUD */
+.is-mobile #super-name { display: none; }
 </style>
 </head>
 <body>
@@ -319,7 +443,7 @@ canvas{display:block;border-radius:8px;
       </div>
 
       <button class="big-btn" onclick="startGame()">⚔️ Entrer dans l'arène !</button>
-      <div class="hint-txt">ZQSD · Clic pour tirer · E pour Super</div>
+      <div class="hint-txt" id="hint-txt">ZQSD · Clic pour tirer · E pour Super</div>
     </div>
 
     <!-- RESULT OVERLAY -->
@@ -332,6 +456,17 @@ canvas{display:block;border-radius:8px;
       </div>
       <button class="big-btn" onclick="restartGame()">🔄 Rejouer</button>
       <a href="index.html" style="color:var(--am);font-size:0.8rem;font-weight:800;text-decoration:none;">← Accueil</a>
+    </div>
+
+    <!-- VIRTUAL JOYSTICK -->
+    <div id="vjoy-zone"></div>
+    <div id="vjoy-base"></div>
+    <div id="vjoy-stick"></div>
+
+    <!-- MOBILE ACTION BUTTONS -->
+    <div id="mobile-btns">
+      <button class="mob-btn" id="mob-fire">🔫</button>
+      <button class="mob-btn" id="mob-super">⚡</button>
     </div>
   </div>
 
@@ -367,14 +502,23 @@ let W, H;
 function resize() {
   const wrap = document.getElementById('canvas-wrap');
   const nav = document.querySelector('nav').offsetHeight;
-  const avW = wrap.clientWidth - 8;
-  const avH = window.innerHeight - nav - 8;
-  const ratio = 4/3;
-  let cw = avW, ch = cw/ratio;
-  if(ch > avH){ ch = avH; cw = ch * ratio; }
-  W = canvas.width = Math.floor(cw);
-  H = canvas.height = Math.floor(ch);
-  TILE = Math.floor(Math.min(W,H)/20);
+  const charPanel = document.querySelector('.char-panel');
+  const charH = (IS_MOBILE && charPanel) ? charPanel.offsetHeight : 0;
+  const avW = wrap.clientWidth;
+  const avH = window.innerHeight - nav - charH;
+  if(IS_MOBILE){
+    // On mobile: fill full width, use portrait/landscape aware height
+    W = canvas.width  = avW;
+    H = canvas.height = Math.max(avH, 280);
+    TILE = Math.floor(Math.min(W, H) / 22);
+  } else {
+    const ratio = 4/3;
+    let cw = avW - 8, ch = cw/ratio;
+    if(ch > avH - 8){ ch = avH - 8; cw = ch * ratio; }
+    W = canvas.width  = Math.floor(cw);
+    H = canvas.height = Math.floor(ch);
+    TILE = Math.floor(Math.min(W,H)/20);
+  }
 }
 window.addEventListener('resize', ()=>{ resize(); if(gameState!=='playing') drawStatic(); });
 
@@ -681,10 +825,21 @@ function update(dt) {
   // ── PLAYER MOVEMENT ──
   const spd=player.speed*(TILE*0.04)*dt*60;
   let moved=false;
+  // Keyboard (PC)
   if(keys['KeyZ']||keys['ArrowUp']){moveEntity(player,0,-spd);moved=true;}
   if(keys['KeyS']||keys['ArrowDown']){moveEntity(player,0,spd);moved=true;}
   if(keys['KeyQ']||keys['ArrowLeft']){moveEntity(player,-spd,0);moved=true;}
   if(keys['KeyD']||keys['ArrowRight']){moveEntity(player,spd,0);moved=true;}
+  // Virtual joystick (mobile)
+  if(IS_MOBILE && vjoyActive) {
+    const vj = getVjoyInput();
+    if(Math.abs(vj.dx) > 0.05 || Math.abs(vj.dy) > 0.05) {
+      moveEntity(player, vj.dx*spd, vj.dy*spd);
+      moved = true;
+    }
+  }
+  // Update mobile UI each frame
+  if(IS_MOBILE) updateMobileUI();
   if(player.reload>0) player.reload-=dt*60;
   if(player.shield>0) player.shield-=dt*60;
   if(player.invincible>0) player.invincible-=dt*60;
@@ -1044,7 +1199,11 @@ function drawStatic(){
   ctx.restore();
 }
 
-// ── INPUT ────────────────────────────────────────────────
+// ── DETECT DEVICE ───────────────────────────────────────
+const IS_MOBILE = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+if (IS_MOBILE) document.body.classList.add('is-mobile');
+
+// ── KEYBOARD INPUT (PC) ──────────────────────────────────
 document.addEventListener('keydown',e=>{
   keys[e.code]=true;
   if(e.code==='KeyE'&&gameState==='playing') activateSuper(player);
@@ -1052,22 +1211,174 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('keyup',e=>keys[e.code]=false);
 
+// ── MOUSE INPUT (PC) ─────────────────────────────────────
 canvas.addEventListener('mousemove',e=>{
+  if(IS_MOBILE) return;
   const r=canvas.getBoundingClientRect();
-  const scale=Math.min(W/(MAP_W*TILE),H/(MAP_H*TILE));
-  const cx=(e.clientX-r.left-W/2)/scale+player.x;
-  const cy=(e.clientY-r.top-H/2)/scale+player.y;
-  mx=cx;my=cy;
+  // Convert screen coords to canvas world coords
+  const scaleX = W / r.width;
+  const scaleY = H / r.height;
+  const cx = (e.clientX - r.left) * scaleX;
+  const cy = (e.clientY - r.top)  * scaleY;
+  // offset by camera (camera centers on player)
+  const camX = player ? player.x - W/2 : 0;
+  const camY = player ? player.y - H/2 : 0;
+  mx = cx + camX;
+  my = cy + camY;
 });
-
 canvas.addEventListener('click',e=>{
+  if(IS_MOBILE) return;
   if(gameState!=='playing'||player.reload>0) return;
+  shoot(player,mx,my);
+});
+// Also update mx,my on mousedown for instant shot
+canvas.addEventListener('mousedown',e=>{
+  if(IS_MOBILE) return;
+  if(gameState!=='playing'||player.reload>0) return;
+  const r=canvas.getBoundingClientRect();
+  const scaleX = W / r.width;
+  const scaleY = H / r.height;
+  const cx = (e.clientX - r.left) * scaleX;
+  const cy = (e.clientY - r.top)  * scaleY;
+  const camX = player ? player.x - W/2 : 0;
+  const camY = player ? player.y - H/2 : 0;
+  mx = cx + camX; my = cy + camY;
   shoot(player,mx,my);
 });
 canvas.addEventListener('contextmenu',e=>{
   e.preventDefault();
-  if(gameState==='playing') activateSuper(player);
+  if(!IS_MOBILE&&gameState==='playing') activateSuper(player);
 });
+
+// ── VIRTUAL JOYSTICK (MOBILE) ────────────────────────────
+let vjoyActive = false;
+let vjoyId = -1;
+let vjoyOriginX = 0, vjoyOriginY = 0;
+let vjoyDX = 0, vjoyDY = 0;
+const VJOY_RADIUS = 55;
+
+const vjoyZone  = document.getElementById('vjoy-zone');
+const vjoyBase  = document.getElementById('vjoy-base');
+const vjoyStick = document.getElementById('vjoy-stick');
+
+function vjoyStart(clientX, clientY) {
+  vjoyActive = true;
+  vjoyOriginX = clientX;
+  vjoyOriginY = clientY;
+
+  // Position base at touch point (relative to canvas-wrap)
+  const wrap = document.getElementById('canvas-wrap');
+  const wr = wrap.getBoundingClientRect();
+  const bx = clientX - wr.left - 55; // 55 = half of 110px base
+  const by = clientY - wr.top  - 55;
+  vjoyBase.style.left  = bx + 'px';
+  vjoyBase.style.top   = by + 'px';
+  vjoyStick.style.left = (clientX - wr.left - 24) + 'px';
+  vjoyStick.style.top  = (clientY - wr.top  - 24) + 'px';
+  vjoyBase.style.display  = 'block';
+  vjoyStick.style.display = 'block';
+}
+
+function vjoyMove(clientX, clientY) {
+  if (!vjoyActive) return;
+  const dx = clientX - vjoyOriginX;
+  const dy = clientY - vjoyOriginY;
+  const dist = Math.hypot(dx, dy);
+  const clamp = Math.min(dist, VJOY_RADIUS);
+  const angle = Math.atan2(dy, dx);
+  vjoyDX = (clamp / VJOY_RADIUS) * Math.cos(angle);
+  vjoyDY = (clamp / VJOY_RADIUS) * Math.sin(angle);
+
+  const wrap = document.getElementById('canvas-wrap');
+  const wr = wrap.getBoundingClientRect();
+  const sx = vjoyOriginX + Math.cos(angle)*clamp - wr.left - 24;
+  const sy = vjoyOriginY + Math.sin(angle)*clamp - wr.top  - 24;
+  vjoyStick.style.left = sx + 'px';
+  vjoyStick.style.top  = sy + 'px';
+}
+
+function vjoyEnd() {
+  vjoyActive = false;
+  vjoyDX = 0; vjoyDY = 0;
+  vjoyBase.style.display  = 'none';
+  vjoyStick.style.display = 'none';
+}
+
+vjoyZone.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  vjoyId = t.identifier;
+  vjoyStart(t.clientX, t.clientY);
+}, { passive: false });
+
+vjoyZone.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === vjoyId) vjoyMove(t.clientX, t.clientY);
+  }
+}, { passive: false });
+
+vjoyZone.addEventListener('touchend', e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === vjoyId) vjoyEnd();
+  }
+}, { passive: false });
+
+// Hook vjoy into movement in update() by exposing dx/dy
+function getVjoyInput() { return { dx: vjoyDX, dy: vjoyDY }; }
+
+// ── MOBILE FIRE/SUPER BUTTONS ────────────────────────────
+let fireInterval = null;
+const mobFire  = document.getElementById('mob-fire');
+const mobSuper = document.getElementById('mob-super');
+
+function mobileFireStart() {
+  if(gameState !== 'playing') return;
+  mobFire.classList.add('pressed');
+  // Find nearest enemy and fire toward them
+  function fireAtNearest() {
+    if(gameState !== 'playing' || player.reload > 0) return;
+    const targets = bots.filter(b => b.alive);
+    if (!targets.length) return;
+    let nearest = targets[0];
+    let minD = Infinity;
+    targets.forEach(t => { const d = Math.hypot(t.x-player.x,t.y-player.y); if(d<minD){minD=d;nearest=t;} });
+    // Add slight random spread for fun
+    const spread = (Math.random() - 0.5) * 30;
+    shoot(player, nearest.x + spread, nearest.y + spread);
+  }
+  fireAtNearest();
+  fireInterval = setInterval(fireAtNearest, 200);
+}
+
+function mobileFireEnd() {
+  mobFire.classList.remove('pressed');
+  clearInterval(fireInterval);
+  fireInterval = null;
+}
+
+mobFire.addEventListener('touchstart', e => { e.preventDefault(); mobileFireStart(); }, { passive: false });
+mobFire.addEventListener('touchend',   e => { e.preventDefault(); mobileFireEnd();   }, { passive: false });
+mobFire.addEventListener('mousedown',  mobileFireStart);
+mobFire.addEventListener('mouseup',    mobileFireEnd);
+
+mobSuper.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if(gameState === 'playing') activateSuper(player);
+  mobSuper.classList.add('pressed');
+  setTimeout(() => mobSuper.classList.remove('pressed'), 200);
+}, { passive: false });
+mobSuper.addEventListener('click', () => {
+  if(gameState === 'playing') activateSuper(player);
+});
+
+// Update mob-super button visual when super ready
+function updateMobileUI() {
+  if (!IS_MOBILE || !player) return;
+  const ready = player.superCharge >= 100;
+  mobSuper.classList.toggle('disabled', !ready);
+  mobSuper.textContent = ready ? '⚡' : '⏳';
+}
 
 
 // Restore last char if logged in
@@ -1081,6 +1392,12 @@ window.addEventListener('DOMContentLoaded', () => {
 // ── INIT ────────────────────────────────────────────────
 resize();
 drawStatic();
+
+// Update hint text & start overlay for mobile
+if (IS_MOBILE) {
+  const hint = document.getElementById('hint-txt');
+  if (hint) hint.innerHTML = '🕹️ Joystick gauche · 🔫 Tirer · ⚡ Super';
+}
 </script>
 <script src="auth.js"></script>
 </body>
