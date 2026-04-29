@@ -186,6 +186,10 @@ canvas{display:block;border-radius:8px;
 .ec-hp{height:5px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;}
 .ec-hp-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#FF3355,#FF7799);transition:width 0.2s;}
 
+.char-btn.locked{opacity:0.55;cursor:default;position:relative;overflow:hidden;}
+.char-btn.locked::after{content:'🔒';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.4rem;background:rgba(0,0,0,0.55);border-radius:10px;}
+.char-btn.locked:hover{border-color:var(--bk)!important;background:linear-gradient(135deg,var(--dp),var(--bk))!important;transform:none!important;box-shadow:none!important;}
+.char-rarity{font-size:0.5rem;font-weight:900;letter-spacing:1px;margin-top:2px;}
 .sep{border:none;border-top:1px solid var(--bk);margin:2px 0;}
 .stat-mini{font-size:0.62rem;display:flex;justify-content:space-between;padding:1px 0;}
 .stat-mini span:last-child{color:var(--gd);font-weight:700;}
@@ -335,38 +339,8 @@ canvas{display:block;border-radius:8px;
   <!-- LEFT: Char select -->
   <div class="char-panel">
     <h3>RENARD</h3>
-    <div class="char-btn selected" data-char="roux" onclick="selectChar('roux',this)">
-      <span class="cb-icon">🦊</span>
-      <div class="cb-name">ROUX</div>
-      <div class="cb-type">⚡ Équilibré</div>
-      <div style="margin-top:5px">
-        <div style="font-size:0.55rem;color:var(--am)">❤️ Vie</div>
-        <div class="mini-bar"><div class="mini-fill" style="width:70%"></div></div>
-        <div style="font-size:0.55rem;color:var(--am)">💥 Dégâts</div>
-        <div class="mini-bar"><div class="mini-fill" style="width:55%"></div></div>
-      </div>
-    </div>
-    <div class="char-btn" data-char="vixar" onclick="selectChar('vixar',this)">
-      <span class="cb-icon">🎯</span>
-      <div class="cb-name">VIXAR</div>
-      <div class="cb-type">🎯 Sniper</div>
-      <div style="margin-top:5px">
-        <div style="font-size:0.55rem;color:var(--am)">❤️ Vie</div>
-        <div class="mini-bar"><div class="mini-fill" style="width:45%"></div></div>
-        <div style="font-size:0.55rem;color:var(--am)">💥 Dégâts</div>
-        <div class="mini-bar"><div class="mini-fill" style="width:90%"></div></div>
-      </div>
-    </div>
-    <div class="char-btn" data-char="grizzard" onclick="selectChar('grizzard',this)">
-      <span class="cb-icon">🐺</span>
-      <div class="cb-name">GRIZZARD</div>
-      <div class="cb-type">🛡️ Tank</div>
-      <div style="margin-top:5px">
-        <div style="font-size:0.55rem;color:var(--am)">❤️ Vie</div>
-        <div class="mini-bar"><div class="mini-fill" style="width:100%"></div></div>
-        <div style="font-size:0.55rem;color:var(--am)">💥 Dégâts</div>
-        <div class="mini-bar"><div class="mini-fill" style="width:70%"></div></div>
-      </div>
+    <div id="char-list">
+      <!-- Rendered by JS based on unlocks -->
     </div>
   </div>
 
@@ -453,8 +427,13 @@ canvas{display:block;border-radius:8px;
         <span class="result-medal" id="result-medal">🏆</span>
         <span class="result-label" id="result-label">Éliminations</span>
         <span class="result-score" id="result-score">0</span>
+        <div id="result-save-badge"></div>
+        <div id="result-chest-reward" style="margin-top:10px"></div>
       </div>
-      <button class="big-btn" onclick="restartGame()">🔄 Rejouer</button>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+        <button class="big-btn" id="open-chest-btn" style="display:none" onclick="openChestFromResult()">📦 Ouvrir mes coffres</button>
+        <button class="big-btn" onclick="restartGame()">🔄 Rejouer</button>
+      </div>
       <a href="index.html" style="color:var(--am);font-size:0.8rem;font-weight:800;text-decoration:none;">← Accueil</a>
     </div>
 
@@ -586,9 +565,13 @@ let statTimer=0;
 
 // ── SELECT CHAR/MODE ─────────────────────────────────────
 function selectChar(c, btn) {
+  // Guard: don't select locked chars
+  if (btn && btn.classList.contains('locked')) return;
+  const unlocks = (typeof FA_AUTH !== 'undefined') ? FA_AUTH.getUnlocks() : { roux: true };
+  if (!unlocks[c]) return;
   selectedChar = c;
   document.querySelectorAll('.char-btn').forEach(b=>b.classList.remove('selected'));
-  btn.classList.add('selected');
+  if (btn) btn.classList.add('selected');
   const brl = BRAWLERS[c];
   document.getElementById('ov-char-icon').textContent = brl.icon;
   document.getElementById('hud-icon').textContent = brl.icon;
@@ -597,10 +580,13 @@ function selectChar(c, btn) {
   if(typeof FA_AUTH !== 'undefined') FA_AUTH.saveLastChar(c);
 }
 function onUserLogin() {
+  renderCharPanel();
   if(typeof FA_AUTH === 'undefined') return;
   const lastChar = FA_AUTH.getLastChar();
-  const btn = document.querySelector('.char-btn[data-char="'+lastChar+'"]');
-  if(btn) selectChar(lastChar, btn);
+  const unlocks = FA_AUTH.getUnlocks();
+  const charToLoad = unlocks[lastChar] ? lastChar : 'roux';
+  const btn = document.querySelector('.char-btn[data-char="'+charToLoad+'"]');
+  if(btn && !btn.classList.contains('locked')) selectChar(charToLoad, btn);
 }
 function selectMode(m, btn) {
   selectedMode = m;
@@ -972,8 +958,10 @@ function addKillFeed(msg){
 
 function endGame(won){
   gameState='over';
+  let chestsEarned = 0;
   // Sauvegarde progression si connecté
   if(typeof FA_AUTH !== 'undefined') {
+    const prevChests = FA_AUTH.currentUser() ? FA_AUTH.getChests(FA_AUTH.currentUser().username) : 0;
     FA_AUTH.saveStats({
       kills: kills,
       wins: won ? 1 : 0,
@@ -982,6 +970,8 @@ function endGame(won){
       shots: shots,
       gamesPlayed: 1,
     });
+    const newChests = FA_AUTH.currentUser() ? FA_AUTH.getChests(FA_AUTH.currentUser().username) : 0;
+    chestsEarned = newChests - prevChests;
   }
   const ovr=document.getElementById('ov-result');
   document.getElementById('result-title').textContent=won?'VICTOIRE !':'DÉFAITE...';
@@ -995,11 +985,24 @@ function endGame(won){
   if(selectedMode==='bounty'){ scoreLabel='Étoiles gagnées'; scoreVal=kills; }
   document.getElementById('result-label').textContent=scoreLabel;
   document.getElementById('result-score').textContent=scoreVal;
-  // Badge connecté dans l'overlay résultat
+
   const savedBadge = (typeof FA_AUTH !== 'undefined' && FA_AUTH.currentUser())
     ? '<div style="font-size:0.7rem;color:#88FF88;font-weight:800;margin-top:6px">✅ Progression sauvegardée !</div>'
     : '<div style="font-size:0.7rem;color:#5C3300;font-weight:800;margin-top:6px">💡 Connecte-toi pour sauvegarder</div>';
-  document.getElementById('result-score').insertAdjacentHTML('afterend', savedBadge);
+  document.getElementById('result-save-badge').innerHTML = savedBadge;
+
+  // Show chest reward
+  const chestDiv = document.getElementById('result-chest-reward');
+  const openBtn  = document.getElementById('open-chest-btn');
+  if (chestsEarned > 0) {
+    chestDiv.innerHTML = `<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,180,0,0.15);border:1px solid rgba(255,180,0,0.4);border-radius:12px;padding:6px 14px;font-size:0.8rem;font-weight:900;color:#FFD700">
+      📦 +${chestsEarned} coffre${chestsEarned>1?'s':''} gagné${chestsEarned>1?'s':''}!
+    </div>`;
+    if (openBtn && typeof FA_CHEST !== 'undefined') openBtn.style.display = 'inline-flex';
+  } else {
+    chestDiv.innerHTML = '';
+    if (openBtn) openBtn.style.display = 'none';
+  }
   ovr.classList.remove('hidden');
 }
 
@@ -1381,12 +1384,69 @@ function updateMobileUI() {
 }
 
 
+// ── CHAR PANEL RENDERING ─────────────────────────────────
+const CHAR_PANEL_DATA = {
+  roux:     { icon:'🦊', name:'ROUX',     type:'⚡ Équilibré', hp:70,  dmg:55,  rarity:'commun',    rarityColor:'#AAAAAA', rarityLabel:'COMMUN'    },
+  vixar:    { icon:'🎯', name:'VIXAR',    type:'🎯 Sniper',    hp:45,  dmg:90,  rarity:'rare',      rarityColor:'#44AAFF', rarityLabel:'RARE'      },
+  grizzard: { icon:'🐺', name:'GRIZZARD', type:'🛡️ Tank',      hp:100, dmg:70,  rarity:'epique',    rarityColor:'#CC44FF', rarityLabel:'ÉPIQUE'    },
+};
+
+function renderCharPanel() {
+  const list = document.getElementById('char-list');
+  if (!list) return;
+  const unlocks = (typeof FA_AUTH !== 'undefined') ? FA_AUTH.getUnlocks() : { roux: true };
+  const current = (typeof FA_AUTH !== 'undefined') ? FA_AUTH.getLastChar() : 'roux';
+
+  list.innerHTML = Object.entries(CHAR_PANEL_DATA).map(([id, c]) => {
+    const owned = !!unlocks[id];
+    const sel   = id === current && owned;
+    const onclick = owned ? `selectChar('${id}',this)` : `showLockedMsg('${id}')`;
+    return `<div class="char-btn ${sel?'selected':''} ${!owned?'locked':''}" data-char="${id}" onclick="${onclick}">
+      <span class="cb-icon">${c.icon}</span>
+      <div class="cb-name">${c.name}</div>
+      <div class="cb-type">${c.type}</div>
+      <div class="char-rarity" style="color:${c.rarityColor}">${c.rarityLabel}</div>
+      <div style="margin-top:5px">
+        <div style="font-size:0.55rem;color:var(--am)">❤️ Vie</div>
+        <div class="mini-bar"><div class="mini-fill" style="width:${c.hp}%"></div></div>
+        <div style="font-size:0.55rem;color:var(--am)">💥 Dégâts</div>
+        <div class="mini-bar"><div class="mini-fill" style="width:${c.dmg}%"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Ensure valid char is selected
+  if (!unlocks[current]) {
+    selectChar('roux', list.querySelector('[data-char="roux"]'));
+  }
+}
+
+function showLockedMsg(charId) {
+  const c = CHAR_PANEL_DATA[charId];
+  const msg = document.createElement('div');
+  msg.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+    background:rgba(0,0,0,0.85);border:1px solid #5C3300;border-radius:12px;
+    padding:10px 20px;font-size:0.8rem;font-weight:800;color:#FFB347;
+    z-index:9999;text-align:center;animation:kfIn 0.2s ease both;`;
+  msg.innerHTML = `🔒 ${c.name} (${c.rarityLabel}) est verrouillé !<br><span style="color:#5C3300;font-size:0.7rem">Ouvre des coffres pour le débloquer</span>`;
+  document.body.appendChild(msg);
+  setTimeout(() => msg.remove(), 2500);
+}
+
+function openChestFromResult() {
+  document.getElementById('ov-result').classList.add('hidden');
+  if (typeof FA_CHEST !== 'undefined') FA_CHEST.openChestUI();
+}
+
 // Restore last char if logged in
 window.addEventListener('DOMContentLoaded', () => {
+  renderCharPanel();
   if(typeof FA_AUTH !== 'undefined') {
     const lastChar = FA_AUTH.getLastChar();
-    const btn = document.querySelector('.char-btn[data-char="'+lastChar+'"]');
-    if(btn) selectChar(lastChar, btn);
+    const unlocks = FA_AUTH.getUnlocks();
+    const charToLoad = unlocks[lastChar] ? lastChar : 'roux';
+    const btn = document.querySelector('.char-btn[data-char="'+charToLoad+'"]');
+    if(btn && !btn.classList.contains('locked')) selectChar(charToLoad, btn);
   }
 });
 // ── INIT ────────────────────────────────────────────────

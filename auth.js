@@ -95,6 +95,19 @@ const FA_AUTH = (() => {
     if (delta.kills) trophyDelta += delta.kills * 1;
     if (delta.gamesPlayed && !delta.wins) trophyDelta += -3; // loss
     users[s.username].trophies[char] = Math.max(0, (users[s.username].trophies[char]||0) + trophyDelta);
+    // Award chests: 1 per win, 1 every 3 games played
+    let chestsToAdd = 0;
+    if (delta.wins) chestsToAdd += delta.wins;
+    if (delta.gamesPlayed) {
+      const prev = users[s.username].stats.gamesPlayed - delta.gamesPlayed;
+      const now  = users[s.username].stats.gamesPlayed;
+      const prevMilestone = Math.floor(prev / 3);
+      const nowMilestone  = Math.floor(now  / 3);
+      chestsToAdd += nowMilestone - prevMilestone;
+    }
+    if (chestsToAdd > 0) {
+      users[s.username].chests = (users[s.username].chests || 0) + chestsToAdd;
+    }
     saveUsers(users);
   }
 
@@ -141,7 +154,96 @@ const FA_AUTH = (() => {
     return u.trophies || { roux:0, vixar:0, grizzard:0 };
   }
 
-  return { register, login, logout, currentUser, saveStats, saveLastChar, getLastChar, getAllPlayers, saveTrophies, getTrophies };
+  // ── Unlocks ──────────────────────────────────
+  function getUnlocks(username) {
+    const users = getUsers();
+    const u = username ? users[username] : users[getSession()?.username];
+    if (!u) return { roux: true, vixar: false, grizzard: false };
+    return u.unlocks || { roux: true, vixar: false, grizzard: false };
+  }
+
+  function saveUnlocks(unlocks) {
+    const s = getSession();
+    if (!s) return;
+    const users = getUsers();
+    if (!users[s.username]) return;
+    users[s.username].unlocks = unlocks;
+    saveUsers(users);
+  }
+
+  function getChests(username) {
+    const users = getUsers();
+    const u = username ? users[username] : users[getSession()?.username];
+    if (!u) return 0;
+    return u.chests || 0;
+  }
+
+  function addChests(n) {
+    const s = getSession();
+    if (!s) return;
+    const users = getUsers();
+    if (!users[s.username]) return;
+    users[s.username].chests = (users[s.username].chests || 0) + n;
+    saveUsers(users);
+  }
+
+  function useChest() {
+    const s = getSession();
+    if (!s) return null;
+    const users = getUsers();
+    if (!users[s.username]) return null;
+    if ((users[s.username].chests || 0) <= 0) return null;
+    users[s.username].chests = (users[s.username].chests || 0) - 1;
+    saveUsers(users);
+    return rollChest(users[s.username]);
+  }
+
+  function rollChest(userData) {
+    // Pool: all chars except roux (always unlocked)
+    const CHARS = [
+      { id: 'vixar',    rarity: 'rare',      chance: 0.05 },
+      { id: 'grizzard', rarity: 'epique',    chance: 0.025 },
+      // Future chars:
+      // { id: 'phantom',  rarity: 'mythique',  chance: 0.015 },
+      // { id: 'celestia', rarity: 'legendaire',chance: 0.01  },
+    ];
+    const unlocks = userData.unlocks || { roux: true, vixar: false, grizzard: false };
+    const roll = Math.random();
+    let cumul = 0;
+    for (const c of CHARS) {
+      cumul += c.chance;
+      if (roll < cumul) {
+        const alreadyOwned = !!unlocks[c.id];
+        if (!alreadyOwned) {
+          unlocks[c.id] = true;
+          const s = getSession();
+          if (s) {
+            const users = getUsers();
+            if (users[s.username]) {
+              users[s.username].unlocks = unlocks;
+              saveUsers(users);
+            }
+          }
+        }
+        return { type: 'char', id: c.id, rarity: c.rarity, alreadyOwned };
+      }
+    }
+    // No char: give trophies bonus instead
+    const bonusTrophies = Math.floor(Math.random() * 20) + 10;
+    const s = getSession();
+    if (s) {
+      const users = getUsers();
+      if (users[s.username]) {
+        const char = users[s.username].char || 'roux';
+        if (!users[s.username].trophies) users[s.username].trophies = { roux:0,vixar:0,grizzard:0 };
+        users[s.username].trophies[char] = (users[s.username].trophies[char]||0) + bonusTrophies;
+        saveUsers(users);
+      }
+    }
+    return { type: 'trophies', amount: bonusTrophies };
+  }
+
+  return { register, login, logout, currentUser, saveStats, saveLastChar, getLastChar, getAllPlayers, saveTrophies, getTrophies, getUnlocks, saveUnlocks, getChests, addChests, useChest };
 })();
 
 // ── TROPHY SYSTEM ───────────────────────────────
@@ -238,6 +340,329 @@ const FA_TROPHIES = (() => {
   }
 
   return { getRank, getProgressInRank, getTotalTrophies, renderBadge, renderRankCard, renderAllRanksTooltip, RANKS, TROPHY_GAINS };
+})();
+
+// ── CHEST / UNLOCK UI ───────────────────────────────────
+const FA_CHEST = (() => {
+  const CHAR_DATA = {
+    roux:     { icon:'🦊', name:'Roux',     rarity:'commun',    rarityColor:'#AAAAAA', rarityLabel:'COMMUN',    rarityStar:'⭐' },
+    vixar:    { icon:'🎯', name:'Vixar',    rarity:'rare',      rarityColor:'#44AAFF', rarityLabel:'RARE',      rarityStar:'💙' },
+    grizzard: { icon:'🐺', name:'Grizzard', rarity:'epique',    rarityColor:'#CC44FF', rarityLabel:'ÉPIQUE',    rarityStar:'💜' },
+    phantom:  { icon:'👻', name:'Phantom',  rarity:'mythique',  rarityColor:'#FF44AA', rarityLabel:'MYTHIQUE',  rarityStar:'💗' },
+    celestia: { icon:'✨', name:'Celestia', rarity:'legendaire',rarityColor:'#FF8800', rarityLabel:'LÉGENDAIRE',rarityStar:'🔥' },
+  };
+
+  const RARITY_CHANCES = {
+    commun:     100,
+    rare:       5,
+    epique:     2.5,
+    mythique:   1.5,
+    legendaire: 1,
+  };
+
+  function getRarityGradient(rarity) {
+    const m = {
+      commun:     'linear-gradient(135deg,#333,#555)',
+      rare:       'linear-gradient(135deg,#003388,#0055CC)',
+      epique:     'linear-gradient(135deg,#440088,#8800CC)',
+      mythique:   'linear-gradient(135deg,#880044,#CC0066)',
+      legendaire: 'linear-gradient(135deg,#884400,#FF8800)',
+    };
+    return m[rarity] || m.commun;
+  }
+
+  function injectChestStyles() {
+    if (document.getElementById('fa-chest-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'fa-chest-styles';
+    s.textContent = `
+      #fa-chest-backdrop {
+        position:fixed;inset:0;z-index:99999;
+        background:rgba(2,1,0,0.92);backdrop-filter:blur(14px);
+        display:flex;align-items:center;justify-content:center;
+        opacity:0;pointer-events:none;transition:opacity 0.3s;
+        font-family:'Nunito',sans-serif;
+      }
+      #fa-chest-backdrop.visible { opacity:1;pointer-events:all; }
+      #fa-chest-box {
+        background:linear-gradient(145deg,#1A0A00,#0A0500);
+        border:1px solid #5C3300;border-radius:24px;
+        padding:32px 40px;max-width:480px;width:90%;
+        text-align:center;position:relative;
+        box-shadow:0 20px 80px rgba(0,0,0,0.8),0 0 60px rgba(255,107,26,0.1);
+      }
+      .chest-title {
+        font-family:'Bebas Neue',sans-serif;font-size:2rem;
+        color:#FFD700;letter-spacing:3px;margin-bottom:4px;
+      }
+      .chest-count-badge {
+        display:inline-flex;align-items:center;gap:6px;
+        background:rgba(255,107,26,0.15);border:1px solid rgba(255,107,26,0.4);
+        border-radius:20px;padding:5px 14px;font-size:0.8rem;
+        font-weight:900;color:#FFB347;margin-bottom:20px;
+      }
+      .chest-anim-wrap {
+        height:140px;display:flex;align-items:center;justify-content:center;
+        margin-bottom:18px;
+      }
+      .chest-icon-main {
+        font-size:5rem;cursor:pointer;transition:transform 0.15s;
+        filter:drop-shadow(0 0 20px rgba(255,180,0,0.5));
+        animation:chestIdle 2s ease-in-out infinite;
+        user-select:none;
+      }
+      @keyframes chestIdle {
+        0%,100%{transform:scale(1) rotate(-3deg)}
+        50%{transform:scale(1.05) rotate(3deg)}
+      }
+      .chest-icon-main:hover { transform:scale(1.1)!important; }
+      .chest-icon-main.shaking {
+        animation:chestShake 0.5s ease-in-out;
+      }
+      @keyframes chestShake {
+        0%,100%{transform:translateX(0)}
+        20%{transform:translateX(-8px) rotate(-5deg)}
+        40%{transform:translateX(8px) rotate(5deg)}
+        60%{transform:translateX(-6px) rotate(-3deg)}
+        80%{transform:translateX(6px) rotate(3deg)}
+      }
+      .chest-reveal {
+        animation:revealPop 0.5s cubic-bezier(0.17,0.89,0.32,1.49) both;
+      }
+      @keyframes revealPop {
+        0%{transform:scale(0.3) rotate(-20deg);opacity:0}
+        100%{transform:scale(1) rotate(0deg);opacity:1}
+      }
+      .rarity-glow-rare      { box-shadow:0 0 40px rgba(68,170,255,0.4); border-color:rgba(68,170,255,0.6)!important; }
+      .rarity-glow-epique    { box-shadow:0 0 40px rgba(200,68,255,0.4); border-color:rgba(200,68,255,0.6)!important; }
+      .rarity-glow-mythique  { box-shadow:0 0 40px rgba(255,68,170,0.4); border-color:rgba(255,68,170,0.6)!important; }
+      .rarity-glow-legendaire{ box-shadow:0 0 60px rgba(255,136,0,0.6);  border-color:rgba(255,136,0,0.8)!important; }
+      .chest-particles { position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:24px; }
+      .particle {
+        position:absolute;width:6px;height:6px;border-radius:50%;
+        animation:particleFly 1.2s ease-out forwards;
+      }
+      @keyframes particleFly {
+        0%{transform:translate(0,0) scale(1);opacity:1}
+        100%{transform:translate(var(--tx),var(--ty)) scale(0);opacity:0}
+      }
+      .chest-result-card {
+        background:linear-gradient(135deg,rgba(0,0,0,0.5),rgba(0,0,0,0.3));
+        border:1px solid #3D2200;border-radius:16px;padding:18px;
+        margin-bottom:16px;transition:all 0.3s;
+      }
+      .chest-open-btn {
+        background:linear-gradient(135deg,#FF6B1A,#AA3300);
+        border:2px solid rgba(255,179,71,0.6);border-radius:50px;
+        color:white;font-family:'Nunito',sans-serif;font-weight:900;
+        font-size:1rem;padding:12px 36px;cursor:pointer;
+        box-shadow:0 0 25px rgba(255,107,26,0.4);transition:all 0.2s;
+        margin:0 4px;
+      }
+      .chest-open-btn:hover { transform:scale(1.04);box-shadow:0 0 40px rgba(255,107,26,0.6); }
+      .chest-open-btn:disabled { opacity:0.4;cursor:not-allowed;transform:none; }
+      .chest-open-btn.secondary {
+        background:transparent;border-color:#3D2200;color:#FFB347;
+        box-shadow:none;
+      }
+      .chest-open-btn.secondary:hover { border-color:#FFB347;background:rgba(255,179,71,0.08); }
+      .chances-grid {
+        display:grid;grid-template-columns:repeat(5,1fr);gap:6px;
+        margin:12px 0;
+      }
+      .chance-item {
+        border-radius:10px;padding:8px 4px;text-align:center;border:1px solid;
+      }
+    `;
+    document.head.appendChild(s);
+  }
+
+  function spawnParticles(color) {
+    const box = document.getElementById('fa-chest-box');
+    if (!box) return;
+    let particles = box.querySelector('.chest-particles');
+    if (!particles) { particles = document.createElement('div'); particles.className='chest-particles'; box.appendChild(particles); }
+    particles.innerHTML = '';
+    for (let i = 0; i < 18; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      const angle = (Math.random() * 360) * Math.PI / 180;
+      const dist = 80 + Math.random() * 120;
+      p.style.cssText = `
+        background:${color};left:50%;top:50%;
+        --tx:${Math.cos(angle)*dist}px;--ty:${Math.sin(angle)*dist}px;
+        animation-delay:${Math.random()*0.2}s;
+      `;
+      particles.appendChild(p);
+    }
+    setTimeout(() => { if(particles) particles.innerHTML=''; }, 1500);
+  }
+
+  function openChestUI() {
+    if (typeof FA_AUTH === 'undefined') return;
+    const user = FA_AUTH.currentUser();
+    if (!user) {
+      alert('Connecte-toi pour ouvrir des coffres !');
+      return;
+    }
+    injectChestStyles();
+    let backdrop = document.getElementById('fa-chest-backdrop');
+    if (!backdrop) {
+      backdrop = document.createElement('div');
+      backdrop.id = 'fa-chest-backdrop';
+      backdrop.innerHTML = `<div id="fa-chest-box"><div class="chest-particles"></div></div>`;
+      document.body.appendChild(backdrop);
+    }
+    renderChestIdle();
+    setTimeout(() => backdrop.classList.add('visible'), 10);
+  }
+
+  function closeChestUI() {
+    const b = document.getElementById('fa-chest-backdrop');
+    if (b) { b.classList.remove('visible'); setTimeout(() => b.remove(), 300); }
+    // Refresh nav button if function exists
+    if (typeof refreshNavButton === 'function') refreshNavButton();
+    if (typeof onUserLogin === 'function') onUserLogin();
+  }
+
+  function renderChestIdle() {
+    const user = FA_AUTH.currentUser();
+    const chests = user ? FA_AUTH.getChests(user.username) : 0;
+    const unlocks = user ? FA_AUTH.getUnlocks(user.username) : {};
+    const allUnlocked = Object.keys(CHAR_DATA).every(k => unlocks[k]);
+
+    const box = document.getElementById('fa-chest-box');
+    box.className = '';
+    box.innerHTML = `
+      <div class="chest-particles"></div>
+      <div class="chest-title">🎁 COFFRE</div>
+      <div class="chest-count-badge">📦 ${chests} coffre${chests>1?'s':''} disponible${chests>1?'s':''}</div>
+
+      <div class="chest-anim-wrap">
+        <div class="chest-icon-main" id="chest-main-icon" onclick="FA_CHEST.doOpen()">📦</div>
+      </div>
+
+      <p style="color:#FFB347;font-size:0.85rem;font-weight:700;margin-bottom:14px">
+        ${chests > 0 ? 'Clique sur le coffre pour l\'ouvrir !' : '⚠️ Plus de coffres — joue pour en gagner !'}
+      </p>
+
+      <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:12px;margin-bottom:16px">
+        <div style="font-size:0.65rem;font-weight:900;color:#FFB347;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">📊 Chances de drop</div>
+        <div class="chances-grid">
+          ${Object.entries(RARITY_CHANCES).map(([r,c])=>{
+            const cd = Object.values(CHAR_DATA).find(x=>x.rarity===r);
+            return `<div class="chance-item" style="background:${getRarityGradient(r)};border-color:${cd?.rarityColor||'#555'}44">
+              <div style="font-size:0.65rem;font-weight:900;color:${cd?.rarityColor||'#aaa'}">${r.toUpperCase()}</div>
+              <div style="font-size:0.85rem;font-weight:900;color:white;margin:2px 0">${c}%</div>
+              <div style="font-size:0.75rem">${cd?.rarityStar||'⭐'}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div style="background:rgba(0,0,0,0.3);border-radius:12px;padding:12px;margin-bottom:16px">
+        <div style="font-size:0.65rem;font-weight:900;color:#FFB347;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">🦊 Personnages</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">
+          ${Object.entries(CHAR_DATA).map(([id,c])=>{
+            const owned = !!unlocks[id];
+            return `<div style="background:${owned?getRarityGradient(c.rarity):'rgba(0,0,0,0.5)'};border:1px solid ${owned?c.rarityColor+'55':'#3D2200'};border-radius:10px;padding:8px 4px;text-align:center;opacity:${owned?1:0.5}">
+              <div style="font-size:1.4rem">${owned?c.icon:'🔒'}</div>
+              <div style="font-size:0.55rem;font-weight:900;color:${owned?c.rarityColor:'#5C3300'}">${c.name.toUpperCase()}</div>
+              <div style="font-size:0.5rem;color:${c.rarityColor};opacity:0.8">${c.rarityLabel}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="chest-open-btn" onclick="FA_CHEST.doOpen()" ${chests<=0?'disabled':''}>📦 Ouvrir un coffre</button>
+        <button class="chest-open-btn secondary" onclick="FA_CHEST.closeChestUI()">Fermer</button>
+      </div>
+
+      <div style="font-size:0.62rem;color:#3D2200;margin-top:12px">
+        💡 Gagne des coffres : +1 par victoire · +1 toutes les 3 parties
+      </div>
+    `;
+  }
+
+  function doOpen() {
+    const user = FA_AUTH.currentUser();
+    if (!user) return;
+    const chests = FA_AUTH.getChests(user.username);
+    if (chests <= 0) return;
+
+    // Shake animation
+    const icon = document.getElementById('chest-main-icon');
+    if (icon) { icon.classList.remove('shaking'); void icon.offsetWidth; icon.classList.add('shaking'); }
+
+    setTimeout(() => {
+      const result = FA_AUTH.useChest();
+      if (!result) return;
+      renderChestResult(result);
+    }, 500);
+  }
+
+  function renderChestResult(result) {
+    const box = document.getElementById('fa-chest-box');
+    const user = FA_AUTH.currentUser();
+    const chests = user ? FA_AUTH.getChests(user.username) : 0;
+
+    let content = '';
+    let glowClass = '';
+    let particleColor = '#FFD700';
+
+    if (result.type === 'char') {
+      const cd = CHAR_DATA[result.id];
+      glowClass = `rarity-glow-${result.rarity}`;
+      particleColor = cd.rarityColor;
+      content = `
+        <div class="chest-title" style="color:${cd.rarityColor}">${result.alreadyOwned ? 'DOUBLON !' : 'NOUVEAU !'}</div>
+        <div class="chest-anim-wrap">
+          <div style="font-size:5.5rem;filter:drop-shadow(0 0 30px ${cd.rarityColor});animation:chestIdle 2s ease-in-out infinite" class="chest-reveal">${cd.icon}</div>
+        </div>
+        <div class="chest-result-card" style="background:${getRarityGradient(result.rarity)};border-color:${cd.rarityColor}66">
+          <div style="font-size:1.8rem;font-family:'Bebas Neue',sans-serif;color:${cd.rarityColor};letter-spacing:3px;margin-bottom:4px">${cd.name.toUpperCase()}</div>
+          <div style="display:inline-block;background:rgba(0,0,0,0.4);border:1px solid ${cd.rarityColor}44;border-radius:12px;padding:3px 12px;font-size:0.7rem;font-weight:900;color:${cd.rarityColor};letter-spacing:2px;margin-bottom:6px">${cd.rarityStar} ${cd.rarityLabel} · ${RARITY_CHANCES[result.rarity]}%</div>
+          ${result.alreadyOwned
+            ? `<div style="color:#FFD700;font-size:0.75rem;font-weight:800">Déjà débloqué — tu reçois +15 🏆 à la place !</div>`
+            : `<div style="color:#88FF88;font-size:0.75rem;font-weight:800">✅ Personnage débloqué ! Il est maintenant disponible en jeu.</div>`
+          }
+        </div>
+      `;
+    } else {
+      // Trophies bonus
+      glowClass = '';
+      particleColor = '#FFD700';
+      content = `
+        <div class="chest-title">BONUS !</div>
+        <div class="chest-anim-wrap">
+          <div style="font-size:5rem;animation:chestIdle 2s ease-in-out infinite" class="chest-reveal">🏆</div>
+        </div>
+        <div class="chest-result-card">
+          <div style="font-size:1.5rem;font-family:'Bebas Neue',sans-serif;color:#FFD700;letter-spacing:3px;margin-bottom:4px">+${result.amount} TROPHÉES</div>
+          <div style="color:#FFB347;font-size:0.75rem;font-weight:800">Bonus de trophées ajouté à ton renard principal !</div>
+          <div style="font-size:0.65rem;color:#5C3300;margin-top:4px">Continue à jouer pour débloquer les personnages rares !</div>
+        </div>
+      `;
+    }
+
+    box.className = glowClass;
+    box.innerHTML = `
+      <div class="chest-particles"></div>
+      ${content}
+      <div style="color:#FFB347;font-size:0.75rem;font-weight:700;margin-bottom:14px">📦 ${chests} coffre${chests>1?'s':''} restant${chests>1?'s':''}</div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        ${chests > 0
+          ? `<button class="chest-open-btn" onclick="FA_CHEST.renderChestIdle();FA_CHEST.doOpen()">📦 Ouvrir encore</button>`
+          : ''}
+        <button class="chest-open-btn" onclick="FA_CHEST.renderChestIdle()">🔙 Voir mes persos</button>
+        <button class="chest-open-btn secondary" onclick="FA_CHEST.closeChestUI()">Fermer</button>
+      </div>
+    `;
+    spawnParticles(particleColor);
+  }
+
+  return { openChestUI, closeChestUI, doOpen, renderChestIdle, CHAR_DATA, RARITY_CHANCES, getRarityGradient };
 })();
 
 
@@ -463,6 +888,9 @@ function renderModalContent(view) {
           </div>
         </div>
         <div style="font-size:0.72rem;color:#5C3300;margin-bottom:12px">🎮 ${user.stats.gamesPlayed} parties jouées</div>
+        <button class="chest-open-btn" style="width:100%;background:linear-gradient(135deg,#FF6B1A,#AA3300);border:2px solid rgba(255,179,71,0.6);border-radius:50px;color:white;font-family:'Nunito',sans-serif;font-weight:900;font-size:0.95rem;padding:11px 20px;cursor:pointer;margin-bottom:8px;box-shadow:0 0 20px rgba(255,107,26,0.3);transition:all 0.2s" onclick="closeAuthModal();FA_CHEST.openChestUI()">
+          📦 Coffres disponibles : <strong>${FA_AUTH.getChests(user.username)||0}</strong>
+        </button>
         <button class="auth-logout" onclick="FA_AUTH.logout()">🚪 Se déconnecter</button>
       </div>`;
   } else {
