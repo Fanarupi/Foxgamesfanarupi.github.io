@@ -87,6 +87,14 @@ const FA_AUTH = (() => {
       if (k in st) st[k] += delta[k];
     });
     users[s.username].stats = st;
+    // Auto-award trophies based on delta
+    const char = users[s.username].char || 'roux';
+    if (!users[s.username].trophies) users[s.username].trophies = { roux:0, vixar:0, grizzard:0 };
+    let trophyDelta = 0;
+    if (delta.wins) trophyDelta += delta.wins * 8;
+    if (delta.kills) trophyDelta += delta.kills * 1;
+    if (delta.gamesPlayed && !delta.wins) trophyDelta += -3; // loss
+    users[s.username].trophies[char] = Math.max(0, (users[s.username].trophies[char]||0) + trophyDelta);
     saveUsers(users);
   }
 
@@ -111,10 +119,125 @@ const FA_AUTH = (() => {
       ...data.stats,
       char: data.char || 'roux',
       createdAt: data.createdAt,
+      trophies: data.trophies || { roux:0, vixar:0, grizzard:0 },
     }));
   }
 
-  return { register, login, logout, currentUser, saveStats, saveLastChar, getLastChar, getAllPlayers };
+  // ── Trophies ─────────────────────────────────
+  function saveTrophies(char, delta) {
+    const s = getSession();
+    if (!s) return;
+    const users = getUsers();
+    if (!users[s.username]) return;
+    if (!users[s.username].trophies) users[s.username].trophies = { roux:0, vixar:0, grizzard:0 };
+    users[s.username].trophies[char] = Math.max(0, (users[s.username].trophies[char]||0) + delta);
+    saveUsers(users);
+  }
+
+  function getTrophies(username) {
+    const users = getUsers();
+    const u = username ? users[username] : users[getSession()?.username];
+    if (!u) return { roux:0, vixar:0, grizzard:0 };
+    return u.trophies || { roux:0, vixar:0, grizzard:0 };
+  }
+
+  return { register, login, logout, currentUser, saveStats, saveLastChar, getLastChar, getAllPlayers, saveTrophies, getTrophies };
+})();
+
+// ── TROPHY SYSTEM ───────────────────────────────
+const FA_TROPHIES = (() => {
+  const RANKS = [
+    { name:'Bois',      min:0,    max:49,   color:'#8B6914', bg:'#3D2800', icon:'🪵', stars:0 },
+    { name:'Bronze',    min:50,   max:149,  color:'#CD7F32', bg:'#3A1A00', icon:'🥉', stars:1 },
+    { name:'Argent',    min:150,  max:349,  color:'#C0C0C0', bg:'#1A1A2A', icon:'🥈', stars:2 },
+    { name:'Or',        min:350,  max:599,  color:'#FFD700', bg:'#2A2000', icon:'🥇', stars:3 },
+    { name:'Diamant',   min:600,  max:999,  color:'#00DDFF', bg:'#001A2A', icon:'💎', stars:4 },
+    { name:'Mythique',  min:1000, max:1499, color:'#FF44FF', bg:'#1A0020', icon:'🔮', stars:5 },
+    { name:'Légendaire',min:1500, max:Infinity, color:'#FF6B1A', bg:'#200500', icon:'🔥', stars:6 },
+  ];
+
+  function getRank(trophies) {
+    for (let i = RANKS.length-1; i >= 0; i--) {
+      if (trophies >= RANKS[i].min) return { ...RANKS[i], index: i };
+    }
+    return { ...RANKS[0], index: 0 };
+  }
+
+  function getProgressInRank(trophies) {
+    const rank = getRank(trophies);
+    if (rank.max === Infinity) return 100;
+    const range = rank.max - rank.min + 1;
+    const progress = trophies - rank.min;
+    return Math.min(100, Math.round((progress / range) * 100));
+  }
+
+  function getTotalTrophies(trophiesObj) {
+    return Object.values(trophiesObj || {}).reduce((s,v) => s+(v||0), 0);
+  }
+
+  // Points awarded per event
+  const TROPHY_GAINS = { win: 8, kill: 1, loss: -3 };
+
+  function renderBadge(trophies, size='md') {
+    const rank = getRank(trophies);
+    const sz = size === 'sm' ? '0.65rem' : size === 'lg' ? '1rem' : '0.75rem';
+    const pad = size === 'sm' ? '2px 6px' : '3px 10px';
+    return `<span style="
+      display:inline-flex;align-items:center;gap:4px;
+      background:${rank.bg};border:1px solid ${rank.color}40;
+      border-radius:20px;padding:${pad};font-size:${sz};font-weight:900;
+      color:${rank.color};white-space:nowrap;
+    ">${rank.icon} ${rank.name} · ${trophies}🏆</span>`;
+  }
+
+  function renderRankCard(char, trophies) {
+    const rank = getRank(trophies);
+    const progress = getProgressInRank(trophies);
+    const nextRank = RANKS[Math.min(rank.index+1, RANKS.length-1)];
+    const charIcons = { roux:'🦊', vixar:'🎯', grizzard:'🐺' };
+    const charNames = { roux:'Roux', vixar:'Vixar', grizzard:'Grizzard' };
+    return `
+      <div style="background:#0A0500;border:1px solid ${rank.color}33;border-radius:14px;padding:14px;transition:all 0.2s;" 
+           onmouseover="this.style.borderColor='${rank.color}66'" onmouseout="this.style.borderColor='${rank.color}33'">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:1.6rem">${charIcons[char]}</span>
+            <div>
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:1rem;color:#FFF3E0;letter-spacing:1px">${charNames[char].toUpperCase()}</div>
+              <div style="font-size:0.65rem;color:#FFB347;font-weight:800">${trophies} trophées</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:1.8rem;filter:drop-shadow(0 0 8px ${rank.color})">${rank.icon}</div>
+            <div style="font-size:0.6rem;font-weight:900;color:${rank.color};letter-spacing:1px">${rank.name.toUpperCase()}</div>
+          </div>
+        </div>
+        <div style="background:rgba(0,0,0,0.4);border-radius:8px;height:8px;overflow:hidden;margin-bottom:4px;">
+          <div style="height:100%;width:${progress}%;background:linear-gradient(90deg,${rank.color}88,${rank.color});border-radius:8px;transition:width 0.5s ease;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.58rem;font-weight:800;">
+          <span style="color:${rank.color}">${rank.min}🏆</span>
+          <span style="color:#5C3300">${rank.max === Infinity ? '∞' : rank.max+'🏆'}</span>
+        </div>
+        ${rank.max !== Infinity ? `<div style="font-size:0.58rem;color:#5C3300;margin-top:4px;text-align:center">
+          Prochain : <span style="color:${nextRank.color}">${nextRank.icon} ${nextRank.name}</span> (encore ${Math.max(0,rank.max+1-trophies)} 🏆)
+        </div>` : `<div style="font-size:0.58rem;color:${rank.color};margin-top:4px;text-align:center;font-weight:900">⭐ RANG MAXIMUM ATTEINT</div>`}
+      </div>`;
+  }
+
+  function renderAllRanksTooltip() {
+    return RANKS.map((r,i) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;background:${r.bg};border:1px solid ${r.color}33;margin-bottom:4px;">
+        <span style="font-size:1.2rem">${r.icon}</span>
+        <div style="flex:1">
+          <div style="font-weight:900;color:${r.color};font-size:0.78rem">${r.name}</div>
+          <div style="font-size:0.62rem;color:#FFB347">${r.min} – ${r.max===Infinity?'∞':r.max} trophées</div>
+        </div>
+        <div style="display:flex;gap:2px">${'⭐'.repeat(r.stars)}</div>
+      </div>`).join('');
+  }
+
+  return { getRank, getProgressInRank, getTotalTrophies, renderBadge, renderRankCard, renderAllRanksTooltip, RANKS, TROPHY_GAINS };
 })();
 
 
@@ -268,7 +391,10 @@ function refreshNavButton() {
   const user = FA_AUTH.currentUser();
   if (user) {
     const charIcons = { roux:'🦊', vixar:'🎯', grizzard:'🐺' };
-    btn.innerHTML = `${charIcons[user.char]||'🦊'} ${user.username}`;
+    const trophies = FA_AUTH.getTrophies(user.username);
+    const rank = (typeof FA_TROPHIES !== 'undefined') ? FA_TROPHIES.getRank(trophies[user.char]||0) : null;
+    const rankIcon = rank ? rank.icon : '';
+    btn.innerHTML = `${charIcons[user.char]||'🦊'} ${user.username} ${rankIcon}`;
     btn.classList.add('logged-in');
     btn.title = 'Voir mon profil';
   } else {
@@ -309,16 +435,32 @@ function renderModalContent(view) {
     const user = FA_AUTH.currentUser();
     const charIcons = { roux:'🦊', vixar:'🎯', grizzard:'🐺' };
     const kd = user.stats.deaths > 0 ? (user.stats.kills / user.stats.deaths).toFixed(2) : user.stats.kills;
+    const trophies = FA_AUTH.getTrophies(user.username);
+    const totalTrophies = FA_TROPHIES.getTotalTrophies(trophies);
+    const mainRank = FA_TROPHIES.getRank(trophies[user.char]||0);
     content.innerHTML = `
       <div class="auth-profile">
         <span class="auth-avatar">${charIcons[user.char]||'🦊'}</span>
         <div class="auth-username">${user.username}</div>
-        <div style="font-size:0.7rem;color:#FFB347;margin-bottom:4px">Renard préféré : <strong style="color:#FFD700">${user.char.toUpperCase()}</strong></div>
-        <div class="auth-stats-grid">
-          <div class="auth-stat-card"><span class="val">${user.stats.kills}</span><span class="lbl">⚔️ Éliminations</span></div>
-          <div class="auth-stat-card"><span class="val">${user.stats.wins}</span><span class="lbl">🏆 Victoires</span></div>
-          <div class="auth-stat-card"><span class="val">${user.stats.gems}</span><span class="lbl">💎 Gemmes</span></div>
-          <div class="auth-stat-card"><span class="val">${kd}</span><span class="lbl">🎯 K/D</span></div>
+        <div style="margin-bottom:10px">${FA_TROPHIES.renderBadge(trophies[user.char]||0,'md')}</div>
+        <div style="font-size:0.65rem;color:#FFB347;margin-bottom:14px">🏆 Total tous renards : <strong style="color:#FFD700">${totalTrophies}</strong></div>
+        
+        <div style="margin-bottom:14px">
+          ${FA_TROPHIES.renderRankCard('roux', trophies.roux||0)}
+          <div style="height:6px"></div>
+          ${FA_TROPHIES.renderRankCard('vixar', trophies.vixar||0)}
+          <div style="height:6px"></div>
+          ${FA_TROPHIES.renderRankCard('grizzard', trophies.grizzard||0)}
+        </div>
+
+        <div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:10px;margin-bottom:12px">
+          <div style="font-size:0.65rem;font-weight:900;color:#FFB347;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📊 Statistiques</div>
+          <div class="auth-stats-grid">
+            <div class="auth-stat-card"><span class="val">${user.stats.kills}</span><span class="lbl">⚔️ Éliminations</span></div>
+            <div class="auth-stat-card"><span class="val">${user.stats.wins}</span><span class="lbl">🏆 Victoires</span></div>
+            <div class="auth-stat-card"><span class="val">${user.stats.gems}</span><span class="lbl">💎 Gemmes</span></div>
+            <div class="auth-stat-card"><span class="val">${kd}</span><span class="lbl">🎯 K/D</span></div>
+          </div>
         </div>
         <div style="font-size:0.72rem;color:#5C3300;margin-bottom:12px">🎮 ${user.stats.gamesPlayed} parties jouées</div>
         <button class="auth-logout" onclick="FA_AUTH.logout()">🚪 Se déconnecter</button>
