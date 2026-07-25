@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Aquarium secret</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      background: #000;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    #message {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+    }
+
+    #aquarium {
+      display: none;
+      width: 80vw;
+      height: 60vh;
+      border: 8px solid #0af;
+      border-radius: 20px;
+      background: linear-gradient(#9be7ff, #0066aa);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .fish, .axolotl {
+      position: absolute;
+      width: 80px;
+      height: 40px;
+      border-radius: 40px;
+      background: orange;
+      box-shadow: 0 0 10px rgba(0,0,0,0.4);
+      animation: swim 12s linear infinite;
+    }
+
+    .fish::before {
+      content: "";
+      position: absolute;
+      right: -20px;
+      top: 10px;
+      width: 0;
+      height: 0;
+      border-top: 10px solid transparent;
+      border-bottom: 10px solid transparent;
+      border-left: 20px solid orange;
+    }
+
+    .fish::after {
+      content: "";
+      position: absolute;
+      left: 10px;
+      top: 12px;
+      width: 8px;
+      height: 8px;
+      background: #fff;
+      border-radius: 50%;
+      box-shadow: 3px 0 0 #000;
+    }
+
+    .axolotl {
+      background: #ffc0cb;
+      animation-duration: 16s;
+    }
+
+    .axolotl::before,
+    .axolotl::after {
+      content: "";
+      position: absolute;
+      top: -8px;
+      width: 4px;
+      height: 20px;
+      background: #ff8fb0;
+      border-radius: 10px;
+    }
+
+    .axolotl::before {
+      left: 10px;
+      box-shadow: 10px 0 #ff8fb0, 20px 0 #ff8fb0;
+    }
+
+    .axolotl::after {
+      right: 10px;
+      box-shadow: -10px 0 #ff8fb0, -20px 0 #ff8fb0;
+    }
+
+    @keyframes swim {
+      0%   { transform: translateX(-100px); }
+      50%  { transform: translateX(80vw); }
+      100% { transform: translateX(-100px); }
+    }
+  </style>
+</head>
+<body>
+  <div id="message">Tape le code secret au clavier pour révéler l’aquarium…</div>
+  <div id="aquarium">
+    <!-- Quelques poissons -->
+    <div class="fish" style="top:10%; animation-delay:0s;"></div>
+    <div class="fish" style="top:35%; animation-delay:3s;"></div>
+    <div class="fish" style="top:60%; animation-delay:6s;"></div>
+    <div class="fish" style="top:80%; animation-delay:9s;"></div>
+    <!-- Un axolotl -->
+    <div class="axolotl" style="top:50%; left:10%;"></div>
+  </div>
+
+  <script>
+    const SECRET_CODE = "axololt"; // change-le si tu veux
+    let buffer = "";
+
+    document.addEventListener("keydown", (e) => {
+      // Ajoute la lettre tapée au buffer
+      buffer += e.key.toLowerCase();
+
+      // Garde seulement les derniers caractères de la longueur du code
+      if (buffer.length > SECRET_CODE.length) {
+        buffer = buffer.slice(-SECRET_CODE.length);
+      }
+
+      // Vérifie si le code est tapé
+      if (buffer === SECRET_CODE) {
+        revealAquarium();
+      }
+    });
+
+    function revealAquarium() {
+      document.body.style.background = "#ffffff";
+      document.body.style.color = "#000000";
+      document.getElementById("message").textContent = "Bienvenue dans l’aquarium secret 🐟";
+      document.getElementById("aquarium").style.display = "block";
+    }
+  </script>
+</body>
+</html>
